@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Corretor de Catalogo Massivo - SSR-M</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">A</span>
+      <div>
+        <h1>Corretor de Catalogo Massivo</h1>
+        <p class="sub">Time SSR-M &middot; Amazon Brasil &middot; uso interno</p>
+      </div>
+    </div>
+    <div class="ai-status" id="aiStatus">verificando IA...</div>
+  </header>
+
+  <main class="container">
+    <!-- 1. UPLOAD -->
+    <section class="card" id="uploadCard">
+      <h2>1. Upload do CSV</h2>
+      <p class="muted">Arquivo exportado do Andi/Workbench com os ASINs de catalogo ruim.</p>
+      <div class="dropzone" id="dropzone">
+        <input type="file" id="csvInput" accept=".csv,text/csv" hidden />
+        <p class="dz-icon">📄</p>
+        <p><strong>Arraste o CSV aqui</strong> ou clique para selecionar</p>
+        <p class="muted small" id="fileName"></p>
+      </div>
+      <p class="error" id="uploadError"></p>
+    </section>
+
+    <!-- 2. DASHBOARD -->
+    <section class="card hidden" id="dashboardCard">
+      <h2>2. Diagnostico</h2>
+      <div class="kpi-grid" id="kpiGrid"></div>
+
+      <div class="two-col">
+        <div class="panel">
+          <h3>Ranking de sellers com mais ASINs ruins</h3>
+          <div class="bar-list" id="sellerRanking"></div>
+        </div>
+        <div class="panel">
+          <h3>Breakdown por AM</h3>
+          <div class="bar-list" id="amBreakdown"></div>
+        </div>
+      </div>
+
+      <div class="filters">
+        <h3>Filtros</h3>
+        <div class="filter-row">
+          <label>AM
+            <select id="filterAm"><option value="">Todos</option></select>
+          </label>
+          <label>Seller
+            <select id="filterSeller"><option value="">Todos</option></select>
+          </label>
+          <label>Tipo de problema
+            <select id="filterProblem">
+              <option value="">Todos</option>
+              <option value="title">Titulo curto/vazio</option>
+              <option value="bullets">Sem bullet points</option>
+              <option value="description">Sem descricao</option>
+              <option value="keywords">Sem keywords</option>
+              <option value="images">Menos de 3 imagens</option>
+            </select>
+          </label>
+          <span class="filter-count" id="filterCount"></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. GERACAO IA -->
+    <section class="card hidden" id="generateCard">
+      <h2>3. Geracao de conteudo com IA</h2>
+      <p class="muted">Gera apenas para campos vazios (titulo curto/vazio, sem bullets, sem descricao, sem keywords). Nao sobrescreve dados existentes.</p>
+      <div class="gen-actions">
+        <button class="btn primary" id="generateBtn">Gerar Correcoes</button>
+        <span class="muted" id="genTarget"></span>
+      </div>
+      <div class="progress hidden" id="progressWrap">
+        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+        <p class="small" id="progressText"></p>
+      </div>
+      <p class="error" id="genError"></p>
+      <div class="gen-summary hidden" id="genSummary"></div>
+    </section>
+
+    <!-- 4. EXPORTACAO -->
+    <section class="card hidden" id="exportCard">
+      <h2>4. Exportacao</h2>
+      <div class="export-grid">
+        <div class="export-block">
+          <h3>Flat files por seller</h3>
+          <p class="muted small">1 planilha .xlsx por seller (PartialUpdate). So campos corrigidos.</p>
+          <button class="btn primary" id="exportAllBtn">Exportar Todos (ZIP)</button>
+        </div>
+        <div class="export-block">
+          <h3>Flat files por AM</h3>
+          <p class="muted small">ZIP com os sellers de um AM especifico.</p>
+          <div class="inline">
+            <select id="exportAmSelect"><option value="">Selecione um AM</option></select>
+            <button class="btn" id="exportAmBtn">Exportar por AM</button>
+          </div>
+        </div>
+        <div class="export-block">
+          <h3>Relatorio interno</h3>
+          <p class="muted small">Excel com aba por AM + KPIs do time.</p>
+          <button class="btn" id="exportReportBtn">Baixar Relatorio</button>
+        </div>
+      </div>
+      <p class="error" id="exportError"></p>
+    </section>
+  </main>
+
+  <footer class="foot">
+    Ferramenta interna SSR-M. Nao altera preco, estoque ou imagens. Nao envia nada ao seller.
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

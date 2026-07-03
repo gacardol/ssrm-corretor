@@ -1,0 +1,11 @@
+asin,merchant_customer_id,seller_name,item_name,glance_views_90d,am_alias,has_bullet_points,has_description,has_main_image,image_count,has_keywords,idq_grade,idq_score,cdq_grade
+B08ABC1234,A1B2C3D4E5,Loja TechBR,Fone,1520,joaosilva,false,false,true,1,false,D,32,C
+B08DEF5678,A1B2C3D4E5,Loja TechBR,Cabo USB-C 2 metros trancado nylon resistente carga rapida,820,joaosilva,true,false,true,4,false,C,55,B
+B08GHI9012,Z9Y8X7W6V5,Casa e Conforto,Jogo de Lencol Casal 4 Pecas 200 fios microfibra macio,3400,mariasouza,false,true,true,2,true,B,68,A
+B08JKL3456,Z9Y8X7W6V5,Casa e Conforto,Toalha,210,mariasouza,false,false,false,0,false,F,18,D
+B08MNO7890,Q1W2E3R4T5,Pet Premium,Racao para caes adultos sabor frango 15kg premium nutricao completa,5600,carlosdias,true,true,true,5,true,A,82,A
+B08PQR1234,Q1W2E3R4T5,Pet Premium,Brinquedo,90,carlosdias,false,false,true,1,false,F,12,D
+B08STU5678,A1B2C3D4E5,Loja TechBR,Carregador Veicular Duplo USB 3.4A para Celular e Tablet,1100,joaosilva,false,false,true,3,false,C,49,C
+B08VWX9012,K5L4M3N2O1,Moda Urbana,Camiseta basica algodao gola redonda unissex varias cores,2700,mariasouza,true,false,true,6,true,B,71,B
+B08YZA3456,K5L4M3N2O1,Moda Urbana,Bone,140,mariasouza,false,false,true,2,false,E,25,D
+B08BCD7890,Q1W2E3R4T5,Pet Premium,Coleira ajustavel para caes porte medio nylon com guia,430,carlosdias,false,false,true,2,false,D,38,C
