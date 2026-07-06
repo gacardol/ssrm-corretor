@@ -36,17 +36,17 @@ const COLUMN_SCHEMA = [
   { field: "item_name",            label: "Titulo",                type: "string",
     aliases: ["item_name", "title", "titulo", "product_name"] },
   { field: "has_bullet_points",    label: "Bullet Points",         type: "presence",
-    aliases: ["has_bullet_points", "bullet_points", "bullets"] },
+    aliases: ["has_bullet_points", "tem_bullet_points", "bullet_points", "bullets"] },
   { field: "has_description",      label: "Descricao",             type: "presence",
-    aliases: ["has_description", "description", "descricao"] },
+    aliases: ["has_description", "tem_descricao", "description", "descricao"] },
   { field: "has_main_image",       label: "Imagem Principal",      type: "presence",
-    aliases: ["has_main_image", "main_image", "imagem"] },
+    aliases: ["has_main_image", "tem_imagem_principal", "main_image", "imagem"] },
   { field: "image_count",          label: "Qtd. de Imagens",       type: "num",
-    aliases: ["image_count", "images", "num_images", "qty_images"] },
+    aliases: ["image_count", "qtd_imagens", "images", "num_images", "qty_images"] },
   { field: "has_keywords",         label: "Keywords",              type: "presence",
-    aliases: ["has_keywords", "keywords", "generic_keywords"] },
+    aliases: ["has_keywords", "tem_keywords", "keywords", "generic_keywords"] },
   { field: "cdq_grade",            label: "CDQ Grade",             type: "string",
-    aliases: ["cdq_grade", "composite_grade", "grade"] },
+    aliases: ["cdq_grade", "nota_cdq", "composite_grade", "grade"] },
   { field: "idq_score",            label: "IDQ Score",             type: "num",
     aliases: ["idq_score", "composite_score", "score"] },
   { field: "idq_grade",            label: "IDQ Grade",             type: "string",
@@ -225,17 +225,23 @@ function toBool(v) {
 }
 function toNum(v) { const n = Number(String(v).replace(/[^0-9.-]/g, "")); return isNaN(n) ? 0 : n; }
 
-/* Diagnostico de problemas por linha. */
+/* Diagnostico de problemas por linha.
+   IMPORTANTE: so diagnostica campos cuja coluna EXISTE no CSV. Se a coluna nao
+   veio no arquivo, o problema fica como null (n/d) e NAO conta como erro. */
 function diagnoseRow(r) {
+  const has = (field) => !!(state.columnMap && state.columnMap[field]);
   const titleLen = (r.item_name || "").length;
+
   r.problems = {
-    title: titleLen === 0 || titleLen < RULES.TITLE_MIN,
-    bullets: !r.has_bullet_points,
-    description: !r.has_description,
-    keywords: !r.has_keywords,
-    images: (r.image_count || 0) < RULES.MIN_IMAGES,
+    title: has("item_name") ? (titleLen === 0 || titleLen < RULES.TITLE_MIN) : null,
+    bullets: has("has_bullet_points") ? !r.has_bullet_points : null,
+    description: has("has_description") ? !r.has_description : null,
+    keywords: has("has_keywords") ? !r.has_keywords : null,
+    images: has("image_count") ? (r.image_count || 0) < RULES.MIN_IMAGES : null,
   };
-  r.needsAi = r.problems.title || r.problems.bullets || r.problems.description || r.problems.keywords;
+  // Precisa de IA se algum campo diagnosticavel (nao-null) estiver com problema.
+  r.needsAi = r.problems.title === true || r.problems.bullets === true ||
+              r.problems.description === true || r.problems.keywords === true;
   return r;
 }
 
@@ -278,21 +284,25 @@ function renderColumnMapping(map, headerFields) {
 function buildDashboard() {
   const rows = state.rows;
   const total = rows.length;
-  const pct = (n) => total ? Math.round((n / total) * 100) : 0;
 
-  const noBullets = rows.filter((r) => r.problems.bullets).length;
-  const noDesc = rows.filter((r) => r.problems.description).length;
-  const fewImg = rows.filter((r) => r.problems.images).length;
-  const noKw = rows.filter((r) => r.problems.keywords).length;
-  const badTitle = rows.filter((r) => r.problems.title).length;
+  // Conta problemas de um campo. Retorna null se a coluna nao existe no CSV (n/d).
+  // O denominador considera so as linhas onde o campo foi diagnosticado (nao-null).
+  const stat = (key) => {
+    const diagnosable = rows.filter((r) => r.problems[key] !== null);
+    if (!diagnosable.length) return null; // coluna ausente -> n/d
+    const withProblem = diagnosable.filter((r) => r.problems[key] === true).length;
+    return { count: withProblem, base: diagnosable.length, pct: Math.round((withProblem / diagnosable.length) * 100) };
+  };
+  // Formata o valor do KPI: "n/d" se ausente, senao "X% (N)".
+  const fmt = (s) => (s === null ? "n/d" : `${s.pct}% (${s.count})`);
 
   const kpis = [
     { val: total, lbl: "ASINs carregados" },
-    { val: pct(badTitle) + "%", lbl: "Titulo curto/vazio", alert: true },
-    { val: pct(noBullets) + "%", lbl: "Sem bullet points", alert: true },
-    { val: pct(noDesc) + "%", lbl: "Sem descricao", alert: true },
-    { val: pct(fewImg) + "%", lbl: "Menos de 3 imagens", alert: true },
-    { val: pct(noKw) + "%", lbl: "Sem keywords", alert: true },
+    { val: fmt(stat("title")), lbl: "Titulo curto/vazio", alert: true },
+    { val: fmt(stat("bullets")), lbl: "Sem bullet points", alert: true },
+    { val: fmt(stat("description")), lbl: "Sem descricao", alert: true },
+    { val: fmt(stat("images")), lbl: "Menos de 3 imagens", alert: true },
+    { val: fmt(stat("keywords")), lbl: "Sem keywords", alert: true },
   ];
   document.getElementById("kpiGrid").innerHTML = kpis.map((k) =>
     `<div class="kpi ${k.alert ? "alert" : ""}"><div class="val">${k.val}</div><div class="lbl">${k.lbl}</div></div>`
