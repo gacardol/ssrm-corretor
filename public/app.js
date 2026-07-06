@@ -158,7 +158,6 @@ function handleFile(file) {
         }
 
         state.rows = dataRows.map((r) => normalizeRow(r, map)).map(diagnoseRow);
-        renderColumnMapping(map, headerFields);
         buildDashboard();
         document.getElementById("dashboardCard").classList.remove("hidden");
         document.getElementById("generateCard").classList.remove("hidden");
@@ -243,41 +242,6 @@ function diagnoseRow(r) {
   r.needsAi = r.problems.title === true || r.problems.bullets === true ||
               r.problems.description === true || r.problems.keywords === true;
   return r;
-}
-
-/* ---------------- Mapeamento detectado (UI) ----------------
-   Mostra, com nomes amigaveis, qual coluna do CSV foi associada a cada campo. */
-function renderColumnMapping(map, headerFields) {
-  const el = document.getElementById("columnMapping");
-  if (!el) return;
-
-  const rows = COLUMN_SCHEMA.map((def) => {
-    const col = map[def.field];
-    const ok = !!col;
-    const status = ok
-      ? `<span class="col-ok">✔ ${escapeHtml(col)}</span>`
-      : `<span class="col-missing">— nao encontrada</span>`;
-    return `<tr>
-        <td>${escapeHtml(def.label)}${def.required ? ' <span class="req">*</span>' : ""}</td>
-        <td>${status}</td>
-      </tr>`;
-  }).join("");
-
-  // Colunas do CSV que nao foram reconhecidas (informativo).
-  const mapped = new Set(Object.values(map).filter(Boolean).map((c) => String(c).toLowerCase()));
-  const unknown = (headerFields || []).filter((h) => h && !mapped.has(String(h).trim().toLowerCase()));
-
-  el.innerHTML = `
-    <details open>
-      <summary>Colunas detectadas no CSV</summary>
-      <table class="col-map-table">
-        <thead><tr><th>Campo</th><th>Coluna no arquivo</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-      ${unknown.length ? `<p class="muted small">Colunas ignoradas (nao reconhecidas): ${unknown.map(escapeHtml).join(", ")}</p>` : ""}
-      <p class="muted small"><span class="req">*</span> obrigatoria</p>
-    </details>`;
-  el.classList.remove("hidden");
 }
 
 /* ---------------- Dashboard ---------------- */

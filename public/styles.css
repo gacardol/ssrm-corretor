@@ -105,14 +105,3 @@ select{font-size:14px;padding:8px 10px;border:1px solid var(--line);border-radiu
 @media(max-width:760px){
   .two-col{grid-template-columns:1fr;}
 }
-
-/* Mapeamento de colunas detectadas */
-.col-mapping{margin-bottom:18px;border:1px solid var(--line);border-radius:10px;background:#fbfcfd;padding:6px 14px;}
-.col-mapping summary{cursor:pointer;font-weight:600;color:var(--navy);padding:8px 0;font-size:14px;}
-.col-map-table{width:100%;border-collapse:collapse;margin:6px 0 4px;font-size:13px;}
-.col-map-table th{text-align:left;color:var(--muted);font-weight:600;padding:6px 8px;border-bottom:1px solid var(--line);}
-.col-map-table td{padding:5px 8px;border-bottom:1px solid #eef1f4;}
-.col-map-table tr:last-child td{border-bottom:none;}
-.col-ok{color:var(--green);font-weight:600;}
-.col-missing{color:var(--muted);font-style:italic;}
-.col-map-table .req,.col-mapping .req{color:var(--red);font-weight:700;}
