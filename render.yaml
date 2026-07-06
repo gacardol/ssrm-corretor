@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: corretor-catalogo-ssrm
+    name: ssrm-corretor
     runtime: node
     plan: free
     buildCommand: npm install

@@ -13,7 +13,74 @@ const RULES = {
 const state = {
   rows: [],        // linhas do CSV (objetos) + diagnostico + correcoes
   filtered: [],    // linhas apos filtro
+  columnMap: {},   // campo interno -> nome real da coluna no CSV
 };
+
+/* ---------------- Mapeamento flexivel de colunas ----------------
+   O Andi/Workbench pode exportar o CSV com nomes de coluna variados.
+   Aqui definimos, para cada campo interno, os nomes aceitos (case-insensitive).
+   type:
+     - "string"   texto simples
+     - "num"      numerico
+     - "presence" "has_*": aceita boolean (true/false) OU a propria coluna de
+                  conteudo (ex: bullet_points com texto) -> presenca = true */
+const COLUMN_SCHEMA = [
+  { field: "asin",                 label: "ASIN",                  type: "string",   required: true,
+    aliases: ["asin", "product_id", "product id", "asin_id"] },
+  { field: "merchant_customer_id", label: "ID do Seller",          type: "string",
+    aliases: ["merchant_customer_id", "mcid", "merchant_id"] },
+  { field: "seller_name",          label: "Nome do Seller",        type: "string",
+    aliases: ["seller_name", "merchant_name", "seller", "nome_loja"] },
+  { field: "am_alias",             label: "Nome do AM",            type: "string",
+    aliases: ["am_alias", "alias", "account_manager", "nam"] },
+  { field: "item_name",            label: "Titulo",                type: "string",
+    aliases: ["item_name", "title", "titulo", "product_name"] },
+  { field: "has_bullet_points",    label: "Bullet Points",         type: "presence",
+    aliases: ["has_bullet_points", "bullet_points", "bullets"] },
+  { field: "has_description",      label: "Descricao",             type: "presence",
+    aliases: ["has_description", "description", "descricao"] },
+  { field: "has_main_image",       label: "Imagem Principal",      type: "presence",
+    aliases: ["has_main_image", "main_image", "imagem"] },
+  { field: "image_count",          label: "Qtd. de Imagens",       type: "num",
+    aliases: ["image_count", "images", "num_images", "qty_images"] },
+  { field: "has_keywords",         label: "Keywords",              type: "presence",
+    aliases: ["has_keywords", "keywords", "generic_keywords"] },
+  { field: "cdq_grade",            label: "CDQ Grade",             type: "string",
+    aliases: ["cdq_grade", "composite_grade", "grade"] },
+  { field: "idq_score",            label: "IDQ Score",             type: "num",
+    aliases: ["idq_score", "composite_score", "score"] },
+  { field: "idq_grade",            label: "IDQ Grade",             type: "string",
+    aliases: ["idq_grade"] },
+  { field: "glance_views_90d",     label: "Glance Views (90d)",    type: "num",
+    aliases: ["glance_views_90d", "glance_views", "gv_trailing_90_days", "gv"] },
+  { field: "promotion_type",       label: "Tipo de Deal",          type: "string",
+    aliases: ["promotion_type", "deal_type", "tipo_deal"] },
+];
+
+/* Constroi o mapa campo interno -> nome real da coluna, a partir do header do CSV.
+   Match case-insensitive e ignorando espacos nas pontas. Retorna tambem os campos
+   obrigatorios que nao foram encontrados. */
+function buildColumnMap(headerFields) {
+  const headers = (headerFields || []).filter((h) => h != null && String(h).trim() !== "");
+  // lookup: nome normalizado (lower/trim) -> nome original da coluna
+  const lookup = {};
+  headers.forEach((h) => { lookup[String(h).trim().toLowerCase()] = h; });
+
+  const map = {};
+  const missingRequired = [];
+  for (const def of COLUMN_SCHEMA) {
+    let found = null;
+    for (const alias of def.aliases) {
+      const hit = lookup[alias.toLowerCase()];
+      if (hit !== undefined) { found = hit; break; }
+    }
+    map[def.field] = found; // pode ser null se nao achou
+    if (!found && def.required) missingRequired.push(def.label);
+  }
+  return { map, missingRequired };
+}
+
+function schemaFor(field) { return COLUMN_SCHEMA.find((d) => d.field === field); }
 
 /* ---------------- Boot ---------------- */
 document.addEventListener("DOMContentLoaded", () => {
@@ -72,9 +139,26 @@ function handleFile(file) {
     transformHeader: (h) => h.trim(),
     complete: (res) => {
       try {
-        const rows = (res.data || []).filter((r) => r.asin || r.ASIN);
-        if (!rows.length) { errEl.textContent = "Nenhuma linha valida encontrada (coluna 'asin' ausente?)."; return; }
-        state.rows = rows.map(normalizeRow).map(diagnoseRow);
+        // 1. Le o header e monta o mapeamento flexivel de colunas.
+        const headerFields = (res.meta && res.meta.fields) || [];
+        const { map, missingRequired } = buildColumnMap(headerFields);
+
+        // 2. Coluna obrigatoria (ASIN) precisa existir.
+        if (missingRequired.length) {
+          errEl.textContent = `Coluna ${missingRequired.join(" e ")} nao encontrada no CSV. Verifique o arquivo exportado do Andi.`;
+          return;
+        }
+        state.columnMap = map;
+
+        const asinCol = map.asin;
+        const dataRows = (res.data || []).filter((r) => String(r[asinCol] || "").trim() !== "");
+        if (!dataRows.length) {
+          errEl.textContent = `Nenhuma linha valida encontrada (coluna "${asinCol}" sem valores).`;
+          return;
+        }
+
+        state.rows = dataRows.map((r) => normalizeRow(r, map)).map(diagnoseRow);
+        renderColumnMapping(map, headerFields);
         buildDashboard();
         document.getElementById("dashboardCard").classList.remove("hidden");
         document.getElementById("generateCard").classList.remove("hidden");
@@ -87,24 +171,49 @@ function handleFile(file) {
   });
 }
 
-/* Normaliza nomes/valores de uma linha. */
-function normalizeRow(r) {
-  const get = (k) => (r[k] !== undefined ? r[k] : r[k.toUpperCase()] !== undefined ? r[k.toUpperCase()] : "");
+/* Normaliza nomes/valores de uma linha usando o mapeamento de colunas detectado.
+   map = { campoInterno: nomeRealDaColunaNoCsv | null } */
+function normalizeRow(r, map) {
+  // valor cru de um campo interno (via nome real da coluna); "" se coluna ausente
+  const raw = (field) => {
+    const col = map[field];
+    return col && r[col] !== undefined ? r[col] : "";
+  };
+  // presenca de conteudo: para campos "has_*".
+  // Se a coluna mapeada for do tipo booleano (has_*), interpreta true/false.
+  // Se for a coluna de conteudo real (ex: bullet_points), presenca = tem texto.
+  const presence = (field) => {
+    const col = map[field];
+    if (!col) return false;                          // coluna ausente = NAO TEM
+    const val = r[col];
+    if (val === undefined || val === null) return false; // NULL/vazio = NAO TEM
+    const s = String(val).trim();
+    if (s === "") return false;                      // vazio = NAO TEM
+    const low = s.toLowerCase();
+    // TEM conteudo: Y / true / 1 / yes / sim
+    if (["true", "1", "yes", "sim", "y"].includes(low)) return true;
+    // NAO TEM: N / false / 0 / no / nao / vazio / placeholders de nulo
+    if (["false", "0", "no", "nao", "não", "n", "-", "null", "nulo", "nan", "na", "n/a", "none", "undefined", "#n/a"].includes(low)) return false;
+    // qualquer outro texto (conteudo real, ex: bullets em texto) = TEM
+    return true;
+  };
+
   return {
-    asin: String(get("asin") || "").trim(),
-    merchant_customer_id: String(get("merchant_customer_id") || "").trim(),
-    seller_name: String(get("seller_name") || "").trim(),
-    item_name: String(get("item_name") || "").trim(),
-    glance_views_90d: toNum(get("glance_views_90d")),
-    am_alias: String(get("am_alias") || "").trim() || "(sem AM)",
-    has_bullet_points: toBool(get("has_bullet_points")),
-    has_description: toBool(get("has_description")),
-    has_main_image: toBool(get("has_main_image")),
-    image_count: toNum(get("image_count")),
-    has_keywords: toBool(get("has_keywords")),
-    idq_grade: String(get("idq_grade") || "").trim(),
-    idq_score: get("idq_score"),
-    cdq_grade: String(get("cdq_grade") || "").trim(),
+    asin: String(raw("asin") || "").trim(),
+    merchant_customer_id: String(raw("merchant_customer_id") || "").trim(),
+    seller_name: String(raw("seller_name") || "").trim(),
+    item_name: String(raw("item_name") || "").trim(),
+    glance_views_90d: toNum(raw("glance_views_90d")),
+    am_alias: String(raw("am_alias") || "").trim() || "(sem AM)",
+    has_bullet_points: presence("has_bullet_points"),
+    has_description: presence("has_description"),
+    has_main_image: presence("has_main_image"),
+    image_count: toNum(raw("image_count")),
+    has_keywords: presence("has_keywords"),
+    idq_grade: String(raw("idq_grade") || "").trim(),
+    idq_score: raw("idq_score"),
+    cdq_grade: String(raw("cdq_grade") || "").trim(),
+    promotion_type: String(raw("promotion_type") || "").trim(),
     // correcoes geradas
     fix: null,
   };
@@ -128,6 +237,41 @@ function diagnoseRow(r) {
   };
   r.needsAi = r.problems.title || r.problems.bullets || r.problems.description || r.problems.keywords;
   return r;
+}
+
+/* ---------------- Mapeamento detectado (UI) ----------------
+   Mostra, com nomes amigaveis, qual coluna do CSV foi associada a cada campo. */
+function renderColumnMapping(map, headerFields) {
+  const el = document.getElementById("columnMapping");
+  if (!el) return;
+
+  const rows = COLUMN_SCHEMA.map((def) => {
+    const col = map[def.field];
+    const ok = !!col;
+    const status = ok
+      ? `<span class="col-ok">✔ ${escapeHtml(col)}</span>`
+      : `<span class="col-missing">— nao encontrada</span>`;
+    return `<tr>
+        <td>${escapeHtml(def.label)}${def.required ? ' <span class="req">*</span>' : ""}</td>
+        <td>${status}</td>
+      </tr>`;
+  }).join("");
+
+  // Colunas do CSV que nao foram reconhecidas (informativo).
+  const mapped = new Set(Object.values(map).filter(Boolean).map((c) => String(c).toLowerCase()));
+  const unknown = (headerFields || []).filter((h) => h && !mapped.has(String(h).trim().toLowerCase()));
+
+  el.innerHTML = `
+    <details open>
+      <summary>Colunas detectadas no CSV</summary>
+      <table class="col-map-table">
+        <thead><tr><th>Campo</th><th>Coluna no arquivo</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      ${unknown.length ? `<p class="muted small">Colunas ignoradas (nao reconhecidas): ${unknown.map(escapeHtml).join(", ")}</p>` : ""}
+      <p class="muted small"><span class="req">*</span> obrigatoria</p>
+    </details>`;
+  el.classList.remove("hidden");
 }
 
 /* ---------------- Dashboard ---------------- */
